@@ -24,10 +24,20 @@ jobs:
           role-to-assume: arn:aws:iam::809790668656:role/GitHubActionsLambdaDeployRole
           aws-region: ap-northeast-1
 
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.14'
+
+      - name: Install dependencies
+        run: |
+          cd lambda
+          pip install -r requirements.txt -t .
+
       - name: Zip Lambda code
         run: |
           cd lambda
-          zip -r ../lambda.zip .
+          zip -r ../lambda.zip . -x "*.pyc" "__pycache__/*" "*.dist-info/*"
 
       - name: Deploy to Lambda
         run: |
