@@ -6,32 +6,39 @@ ec2 = boto3.client('ec2')
 INSTANCE_ID = os.environ['INSTANCE_ID']
 
 
-def lambda_handler (event, context):
+def lambda_handler(event, context):
+    # デバッグ: 受信したイベントをログに記録
+    print(f"Received event: {json.dumps(event)}")
+
     try:
         # event['body']が文字列の場合とdictの場合の両方に対応
-        if isinstance(event.get('body'), str):
-            body = json.loads(event['body'])
+        body_str = event.get('body', '{}')
+        if isinstance(body_str, str):
+            if not body_str or body_str.strip() == '':
+                body = {}
+            else:
+                body = json.loads(body_str)
         else:
-            body = event.get('body', {})
+            body = body_str if body_str else {}
     except (json.JSONDecodeError, KeyError, TypeError) as e:
         print(f"Error parsing body: {e}, event: {event}")
-        return {
-            "statusCode": 400,
-            "body": json.dumps({"error": "Invalid request body"})
-        }
+        # Discordの検証リクエストの場合、空のbodyでもPINGとして扱う
+        body = {}
 
     # DiscordのPINGリクエスト（検証用）に対応
     request_type = body.get("type")
-    print(f"Request type: {request_type}, body: {body}")
+    print(f"Request type: {request_type}, body: {json.dumps(body)}")
 
     if request_type == 1:  # PING
         print("Responding to PING request")
+        response_body = json.dumps({"type": 1})
+        print(f"Response: {response_body}")
         return {
             "statusCode": 200,
             "headers": {
                 "Content-Type": "application/json"
             },
-            "body": json.dumps({"type": 1})
+            "body": response_body
         }
 
     # スラッシュコマンドの処理
