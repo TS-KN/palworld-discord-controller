@@ -17,29 +17,45 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
+
+      - name: Check for lambda changes
+        id: check-changes
+        run: |
+          if git diff --name-only HEAD~1 HEAD | grep -q "^lambda/"; then
+            echo "lambda_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "lambda_changed=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Configure AWS credentials
+        if: steps.check-changes.outputs.lambda_changed == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::809790668656:role/GitHubActionsLambdaDeployRole
           aws-region: ap-northeast-1
 
       - name: Setup Python
+        if: steps.check-changes.outputs.lambda_changed == 'true'
         uses: actions/setup-python@v4
         with:
           python-version: '3.14'
 
       - name: Install dependencies
+        if: steps.check-changes.outputs.lambda_changed == 'true'
         run: |
           cd lambda
           pip install -r requirements.txt -t .
 
       - name: Zip Lambda code
+        if: steps.check-changes.outputs.lambda_changed == 'true'
         run: |
           cd lambda
           zip -r ../lambda.zip . -x "*.pyc" "__pycache__/*" "*.dist-info/*"
 
       - name: Deploy to Lambda
+        if: steps.check-changes.outputs.lambda_changed == 'true'
         run: |
           aws lambda update-function-code \
             --function-name discord-ec2-controller \
