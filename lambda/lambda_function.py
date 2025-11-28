@@ -6,7 +6,7 @@ ec2 = boto3.client('ec2')
 INSTANCE_ID = os.environ['INSTANCE_ID']
 
 
-def handler(event, context):
+def lambda_handler (event, context):
     try:
         # event['body']が文字列の場合とdictの場合の両方に対応
         if isinstance(event.get('body'), str):
