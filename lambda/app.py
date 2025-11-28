@@ -8,8 +8,13 @@ INSTANCE_ID = os.environ['INSTANCE_ID']
 
 def handler(event, context):
     try:
-        body = json.loads(event['body'])
-    except (json.JSONDecodeError, KeyError):
+        # event['body']が文字列の場合とdictの場合の両方に対応
+        if isinstance(event.get('body'), str):
+            body = json.loads(event['body'])
+        else:
+            body = event.get('body', {})
+    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        print(f"Error parsing body: {e}, event: {event}")
         return {
             "statusCode": 400,
             "body": json.dumps({"error": "Invalid request body"})
@@ -17,9 +22,15 @@ def handler(event, context):
 
     # DiscordのPINGリクエスト（検証用）に対応
     request_type = body.get("type")
+    print(f"Request type: {request_type}, body: {body}")
+
     if request_type == 1:  # PING
+        print("Responding to PING request")
         return {
             "statusCode": 200,
+            "headers": {
+                "Content-Type": "application/json"
+            },
             "body": json.dumps({"type": 1})
         }
 
