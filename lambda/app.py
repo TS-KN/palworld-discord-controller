@@ -7,18 +7,40 @@ INSTANCE_ID = os.environ['INSTANCE_ID']
 
 
 def handler(event, context):
-    body = json.loads(event['body'])
+    try:
+        body = json.loads(event['body'])
+    except (json.JSONDecodeError, KeyError):
+        return {
+            "statusCode": 400,
+            "body": json.dumps({"error": "Invalid request body"})
+        }
 
-    command = body.get("data", {}).get("name")
+    # DiscordのPINGリクエスト（検証用）に対応
+    request_type = body.get("type")
+    if request_type == 1:  # PING
+        return {
+            "statusCode": 200,
+            "body": json.dumps({"type": 1})
+        }
 
-    if command == "start":
-        return start_ec2()
-    elif command == "stop":
-        return stop_ec2()
-    elif command == "status":
-        return get_status()
+    # スラッシュコマンドの処理
+    if request_type == 2:  # APPLICATION_COMMAND
+        command = body.get("data", {}).get("name")
 
-    return response("Unknown command")
+        if command == "start":
+            return start_ec2()
+        elif command == "stop":
+            return stop_ec2()
+        elif command == "status":
+            return get_status()
+
+        return response("Unknown command")
+
+    # その他のタイプはエラー
+    return {
+        "statusCode": 400,
+        "body": json.dumps({"error": "Unsupported interaction type"})
+    }
 
 
 def start_ec2():
