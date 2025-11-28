@@ -6,13 +6,21 @@ from nacl.signing import VerifyKey
 from nacl.exceptions import BadSignatureError
 
 ec2 = boto3.client('ec2')
-INSTANCE_ID = os.environ['INSTANCE_ID']
-PUBLIC_KEY = os.environ['DISCORD_PUBLIC_KEY']
+INSTANCE_ID = os.environ.get('INSTANCE_ID', '')
+PUBLIC_KEY = os.environ.get('DISCORD_PUBLIC_KEY', '')
 
 
 def lambda_handler(event, context):
-    # セキュリティヘッダーの検証（リクエスト処理の前に実行）
-    if not _verify_signature(event):
+    try:
+        # セキュリティヘッダーの検証（リクエスト処理の前に実行）
+        if not _verify_signature(event):
+            return {
+                "statusCode": 401,
+                "body": json.dumps({"error": "Unauthorized"})
+            }
+    except Exception as e:
+        print(f"Error in signature verification: {e}")
+        # 検証エラーが発生した場合は401を返す
         return {
             "statusCode": 401,
             "body": json.dumps({"error": "Unauthorized"})
@@ -33,40 +41,47 @@ def lambda_handler(event, context):
         # Discordの検証リクエストの場合、空のbodyでもPINGとして扱う
         body = {}
 
-    # DiscordのPINGリクエスト（検証用）に対応
-    request_type = body.get("type")
-    print(f"Request type: {request_type}, body: {json.dumps(body)}")
+    try:
+        # DiscordのPINGリクエスト（検証用）に対応
+        request_type = body.get("type")
+        print(f"Request type: {request_type}, body: {json.dumps(body)}")
 
-    if request_type == 1:  # PING
-        print("Responding to PING request")
-        response_body = json.dumps({"type": 1})
-        print(f"Response: {response_body}")
+        if request_type == 1:  # PING
+            print("Responding to PING request")
+            response_body = json.dumps({"type": 1})
+            print(f"Response: {response_body}")
+            return {
+                "statusCode": 200,
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": response_body
+            }
+
+        # スラッシュコマンドの処理
+        if request_type == 2:  # APPLICATION_COMMAND
+            command = body.get("data", {}).get("name")
+
+            if command == "start":
+                return start_ec2()
+            elif command == "stop":
+                return stop_ec2()
+            elif command == "status":
+                return get_status()
+
+            return response("Unknown command")
+
+        # その他のタイプはエラー
         return {
-            "statusCode": 200,
-            "headers": {
-                "Content-Type": "application/json"
-            },
-            "body": response_body
+            "statusCode": 400,
+            "body": json.dumps({"error": "Unsupported interaction type"})
         }
-
-    # スラッシュコマンドの処理
-    if request_type == 2:  # APPLICATION_COMMAND
-        command = body.get("data", {}).get("name")
-
-        if command == "start":
-            return start_ec2()
-        elif command == "stop":
-            return stop_ec2()
-        elif command == "status":
-            return get_status()
-
-        return response("Unknown command")
-
-    # その他のタイプはエラー
-    return {
-        "statusCode": 400,
-        "body": json.dumps({"error": "Unsupported interaction type"})
-    }
+    except Exception as e:
+        print(f"Unexpected error: {e}", exc_info=True)
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"error": "Internal server error"})
+        }
 
 def _verify_signature(event):
     """Discordのリクエスト署名を検証"""
