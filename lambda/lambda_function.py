@@ -2,13 +2,21 @@ import json
 import boto3
 import os
 
+from nacl.signing import VerifyKey
+from nacl.exceptions import BadSignatureError
+
 ec2 = boto3.client('ec2')
 INSTANCE_ID = os.environ['INSTANCE_ID']
+PUBLIC_KEY = os.environ['DISCORD_PUBLIC_KEY']
 
 
 def lambda_handler(event, context):
-    # デバッグ: 受信したイベントをログに記録
-    print(f"Received event: {json.dumps(event)}")
+    # セキュリティヘッダーの検証（リクエスト処理の前に実行）
+    if not _verify_signature(event):
+        return {
+            "statusCode": 401,
+            "body": json.dumps({"error": "Unauthorized"})
+        }
 
     try:
         # event['body']が文字列の場合とdictの場合の両方に対応
@@ -60,6 +68,30 @@ def lambda_handler(event, context):
         "body": json.dumps({"error": "Unsupported interaction type"})
     }
 
+def _verify_signature(event):
+    """Discordのリクエスト署名を検証"""
+    if not PUBLIC_KEY:
+        # 公開鍵が設定されていない場合は検証をスキップ（開発環境など）
+        print("Warning: DISCORD_PUBLIC_KEY not set, skipping signature verification")
+        return True
+
+    headers = event.get('headers', {})
+    # ヘッダー名は小文字に変換される場合がある
+    signature = headers.get('x-signature-ed25519') or headers.get('X-Signature-Ed25519')
+    timestamp = headers.get('x-signature-timestamp') or headers.get('X-Signature-Timestamp')
+    body = event.get('body', '')
+
+    if not signature or not timestamp:
+        print("Missing signature headers")
+        return False
+
+    try:
+        verify_key = VerifyKey(bytes.fromhex(PUBLIC_KEY))
+        verify_key.verify(f'{timestamp}{body}'.encode(), bytes.fromhex(signature))
+        return True
+    except (BadSignatureError, ValueError) as e:
+        print(f"Signature verification failed: {e}")
+        return False
 
 def start_ec2():
     ec2.start_instances(InstanceIds=[INSTANCE_ID])
