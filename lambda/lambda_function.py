@@ -125,7 +125,7 @@ def get_status():
     ip_address = instance.get("PublicIpAddress")
 
     if ip_address:
-        message = f"📡 EC2 状態: {state}\n🌐 公開IP: {ip_address}"
+        message = f"📡 EC2 状態: {state}\n🌐 公開IP: {ip_address}:8211"
     else:
         message = f"📡 EC2 状態: {state}\n🌐 公開IP: 未割り当て"
 
