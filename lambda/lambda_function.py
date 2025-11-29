@@ -77,7 +77,7 @@ def lambda_handler(event, context):
             "body": json.dumps({"error": "Unsupported interaction type"})
         }
     except Exception as e:
-        print(f"Unexpected error: {e}", exc_info=True)
+        print(f"Unexpected error: {e}")
         return {
             "statusCode": 500,
             "body": json.dumps({"error": "Internal server error"})
