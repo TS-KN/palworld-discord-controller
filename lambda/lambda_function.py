@@ -108,7 +108,29 @@ def _verify_signature(event):
         print(f"Signature verification failed: {e}")
         return False
 
+def _get_instance_state_and_ip():
+    """EC2 インスタンスの状態と Public IP を取得する共通関数"""
+    status = ec2.describe_instances(InstanceIds=[INSTANCE_ID])
+    instance = status["Reservations"][0]["Instances"][0]
+    state = instance["State"]["Name"]
+    ip_address = instance.get("PublicIpAddress")
+
+    return state, ip_address
+
+
 def start_ec2():
+    # まず現在の状態を確認
+    state, ip_address = _get_instance_state_and_ip()
+
+    # すでに起動済みの場合は、その旨とIP（あれば）を返す
+    if state == "running":
+        if ip_address:
+            message = f"✅ すでに起動中です！\n📡 EC2 状態: {state}\n🌐 公開IP: {ip_address}:8211"
+        else:
+            message = f"✅ すでに起動中です！\n📡 EC2 状態: {state}\n🌐 公開IP: 未割り当て"
+        return response(message)
+
+    # 起動していない場合は起動処理を実行
     ec2.start_instances(InstanceIds=[INSTANCE_ID])
     return response("⏳ EC2 起動中… 数分後に参加できます！")
 
@@ -119,10 +141,7 @@ def stop_ec2():
 
 
 def get_status():
-    status = ec2.describe_instances(InstanceIds=[INSTANCE_ID])
-    instance = status["Reservations"][0]["Instances"][0]
-    state = instance["State"]["Name"]
-    ip_address = instance.get("PublicIpAddress")
+    state, ip_address = _get_instance_state_and_ip()
 
     if ip_address:
         message = f"📡 EC2 状態: {state}\n🌐 公開IP: {ip_address}:8211"
