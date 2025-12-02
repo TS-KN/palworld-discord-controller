@@ -136,8 +136,20 @@ def start_ec2():
 
 
 def stop_ec2():
+    # 現在の状態を確認
+    state, _ = _get_instance_state_and_ip()
+
+    # すでに停止中 or 停止処理中の場合
+    if state in ("stopping", "stopped"):
+        if state == "stopped":
+            message = "✅ すでに停止済みです。"
+        else:
+            message = "⏳ すでに停止処理中です…"
+        return response(message)
+
+    # 起動中などの場合は停止処理を開始
     ec2.stop_instances(InstanceIds=[INSTANCE_ID])
-    return response("🛑 サーバー停止中…")
+    return response("🛑 サーバー停止中… 数分後に完全に停止します。")
 
 
 def get_status():
