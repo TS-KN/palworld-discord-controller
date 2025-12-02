@@ -135,6 +135,9 @@ def get_status():
 def response(message: str):
     return {
         "statusCode": 200,
+        "headers": {
+            "Content-Type": "application/json"
+        },
         "body": json.dumps({
             "type": 4,
             "data": {"content": message}
