@@ -61,9 +61,17 @@ def lambda_handler(event, context):
         # スラッシュコマンドの処理
         if request_type == 2:  # APPLICATION_COMMAND
             command = body.get("data", {}).get("name")
+            print(f"Processing command: {command}")
 
             if command == "start":
-                return start_ec2()
+                print("Starting /start command processing")
+                try:
+                    result = start_ec2()
+                    print(f"/start command completed successfully, response: {json.dumps(result)}")
+                    return result
+                except Exception as e:
+                    print(f"Error in /start command: {e}", exc_info=True)
+                    return response(f"❌ エラーが発生しました: {str(e)}")
             elif command == "stop":
                 return stop_ec2()
             elif command == "status":
@@ -110,29 +118,60 @@ def _verify_signature(event):
 
 def _get_instance_state_and_ip():
     """EC2 インスタンスの状態と Public IP を取得する共通関数"""
-    status = ec2.describe_instances(InstanceIds=[INSTANCE_ID])
-    instance = status["Reservations"][0]["Instances"][0]
-    state = instance["State"]["Name"]
-    ip_address = instance.get("PublicIpAddress")
+    print(f"[_get_instance_state_and_ip] Getting state for instance: {INSTANCE_ID}")
+    try:
+        print("[_get_instance_state_and_ip] Calling describe_instances...")
+        status = ec2.describe_instances(InstanceIds=[INSTANCE_ID])
+        print(f"[_get_instance_state_and_ip] describe_instances response received")
 
-    return state, ip_address
+        if not status.get("Reservations") or len(status["Reservations"]) == 0:
+            print("[_get_instance_state_and_ip] No reservations found")
+            raise Exception("No reservations found for instance")
+
+        if not status["Reservations"][0].get("Instances") or len(status["Reservations"][0]["Instances"]) == 0:
+            print("[_get_instance_state_and_ip] No instances found in reservation")
+            raise Exception("No instances found in reservation")
+
+        instance = status["Reservations"][0]["Instances"][0]
+        state = instance["State"]["Name"]
+        ip_address = instance.get("PublicIpAddress")
+        print(f"[_get_instance_state_and_ip] State: {state}, IP: {ip_address}")
+
+        return state, ip_address
+    except Exception as e:
+        print(f"[_get_instance_state_and_ip] Exception: {e}", exc_info=True)
+        raise
 
 
 def start_ec2():
-    # まず現在の状態を確認
-    state, ip_address = _get_instance_state_and_ip()
+    print(f"[start_ec2] Function called, INSTANCE_ID: {INSTANCE_ID}")
 
-    # すでに起動済みの場合は、その旨とIP（あれば）を返す
-    if state == "running":
-        if ip_address:
-            message = f"✅ すでに起動中です！\n📡 EC2 状態: {state}\n🌐 公開IP: {ip_address}:8211"
-        else:
-            message = f"✅ すでに起動中です！\n📡 EC2 状態: {state}\n🌐 公開IP: 未割り当て"
+    try:
+        # まず現在の状態を確認
+        print("[start_ec2] Getting instance state and IP...")
+        state, ip_address = _get_instance_state_and_ip()
+        print(f"[start_ec2] Current state: {state}, IP: {ip_address}")
+
+        # すでに起動済みの場合は、その旨とIP（あれば）を返す
+        if state == "running":
+            print("[start_ec2] Instance is already running")
+            if ip_address:
+                message = f"✅ すでに起動中です！\n📡 EC2 状態: {state}\n🌐 公開IP: {ip_address}:8211"
+            else:
+                message = f"✅ すでに起動中です！\n📡 EC2 状態: {state}\n🌐 公開IP: 未割り当て"
+            print(f"[start_ec2] Returning message: {message}")
+            return response(message)
+
+        # 起動していない場合は起動処理を実行
+        print(f"[start_ec2] Starting instance {INSTANCE_ID}...")
+        start_response = ec2.start_instances(InstanceIds=[INSTANCE_ID])
+        print(f"[start_ec2] Start response: {json.dumps(start_response, default=str)}")
+        message = "⏳ EC2 起動中… 数分後に参加できます！"
+        print(f"[start_ec2] Returning message: {message}")
         return response(message)
-
-    # 起動していない場合は起動処理を実行
-    ec2.start_instances(InstanceIds=[INSTANCE_ID])
-    return response("⏳ EC2 起動中… 数分後に参加できます！")
+    except Exception as e:
+        print(f"[start_ec2] Exception occurred: {e}", exc_info=True)
+        raise
 
 
 def stop_ec2():
@@ -164,7 +203,7 @@ def get_status():
 
 
 def response(message: str):
-    return {
+    response_data = {
         "statusCode": 200,
         "headers": {
             "Content-Type": "application/json"
@@ -174,3 +213,5 @@ def response(message: str):
             "data": {"content": message}
         })
     }
+    print(f"[response] Returning response: {json.dumps(response_data)}")
+    return response_data
